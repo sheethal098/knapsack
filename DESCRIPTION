@@ -1,0 +1,20 @@
+Package: knapsack
+Type: Package
+Title: Knapsack Problem Algorithms
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Sheethal", "Lakshmana",
+      email = "shehe874@student.liu.se",
+      role = c("aut", "cre")
+    ),
+    person(
+      "Mariam", "Yayloyan",
+      email = "marya117@student.liu.se",
+      role = c("aut", "ctb")
+    )
+  )
+Description: Implements brute force, dynamic programming, and greedy algorithms for solving the knapsack problem. Includes parallel brute force search, unit tests, and performance comparisons.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
