@@ -1,0 +1,210 @@
+---
+title: "Knapsack Algorithms: Performance and Parallelization"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Knapsack Algorithms: Performance and Parallelization}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(knapsack)   # replace with your package name if different
+```
+
+## Introduction
+
+This vignette answers four questions about the knapsack algorithms in this
+package. The package offers four ways to solve the problem, where every item
+has a weight `w` and a value `v`, and the goal is to maximize total value
+without exceeding the weight limit `W`:
+
+| Function | Method | Result |
+|---|---|---|
+| `brute_force_knapsack()` | Checks all $2^n$ combinations | Exact |
+| `knapsack_dynamic()` | Dynamic programming, $O(nW)$ | Exact |
+| `knapsack_greedy()` | Sorts by value/weight ratio | Approximate |
+| `brute_force_knapsack_parallel(..., parallel = TRUE)` | Brute force split across CPU cores | Exact |
+
+All timings below are measured with `system.time()` while this vignette is
+built, so the exact numbers depend on the machine.
+
+## Test data
+
+We generate a reproducible data set of 1,000,000 candidate objects. Smaller
+problems take the first `n` rows of it.
+
+```{r data}
+suppressWarnings(RNGversion(min(as.character(getRversion()), "3.5.3")))
+set.seed(42, kind = "Mersenne-Twister", normal.kind = "Inversion")
+n <- 2000
+knapsack_objects <- data.frame(
+  w = sample(1:4000, size = n, replace = TRUE),
+  v = runif(n = n, 0, 10000)
+)
+head(knapsack_objects)
+```
+
+## Question 1: How long does brute force take for n = 16 objects?
+
+```{r brute16}
+items16 <- knapsack_objects[1:16, ]
+
+time_brute16 <- system.time(
+  res_brute16 <- brute_force_knapsack(items16, W = 3500)
+)
+
+res_brute16
+time_brute16
+```
+
+Brute force with 16 objects evaluates $2^{16} = 65{,}536$ combinations and
+took **`r round(time_brute16[["elapsed"]], 2)` seconds** here.
+
+The cost doubles with every extra object, so 20 objects would need roughly 16
+times as long and 25 objects (the limit enforced by the function) roughly 512
+times as long.
+
+## Question 2: How long does dynamic programming take for n = 500 objects?
+
+```{r dynamic500}
+items500 <- knapsack_objects[1:500, ]
+
+time_dyn500 <- system.time(
+  res_dyn500 <- knapsack_dynamic(items500, W = 3500)
+)
+
+res_dyn500$value
+length(res_dyn500$elements)
+time_dyn500
+```
+
+Dynamic programming with 500 objects and capacity 3500 took
+**`r round(time_dyn500[["elapsed"]], 2)` seconds**. Its running time grows
+with $n \times W$ instead of $2^n$, which is why 500 objects is no problem
+while brute force is impossible at that size. The price is that the time (and
+the memory for the table) also grows with the capacity `W`, which must be an
+integer.
+
+## Question 3: How long does the greedy heuristic take for n = 1,000,000 objects?
+
+```{r data-big}
+suppressWarnings(RNGversion(min(as.character(getRversion()), "3.5.3")))
+set.seed(42, kind = "Mersenne-Twister", normal.kind = "Inversion")
+n_big <- 1000000
+knapsack_big <- data.frame(
+  w = sample(1:4000, size = n_big, replace = TRUE),
+  v = runif(n = n_big, 0, 10000)
+)
+```
+
+```{r greedy1e6}
+time_greedy <- system.time(
+  res_greedy <- knapsack_greedy(knapsack_big, W = 3500)
+)
+
+res_greedy$value
+length(res_greedy$elements)
+time_greedy
+```
+
+The greedy heuristic handled all 1,000,000 objects in
+**`r round(time_greedy[["elapsed"]], 2)` seconds**. Its cost is dominated by
+sorting the value/weight ratios, $O(n \log n)$. The trade-off is that it does
+not always find the optimal value. We can check how close it gets on the
+500-object problem, where the exact answer is known:
+
+```{r greedy-quality}
+res_greedy500 <- knapsack_greedy(items500, W = 3500)
+round(res_greedy500$value / res_dyn500$value * 100, 2)
+```
+
+On this instance, the greedy solution reaches
+**`r round(res_greedy500$value / res_dyn500$value * 100, 2)`%** of the optimal
+value.
+
+## Question 4: What performance gain can parallelizing brute force give?
+
+Brute force is well suited to parallelization because the combinations are
+independent: the search space is split into equal chunks, each CPU core
+searches one chunk, and the best result from all workers is kept.
+
+The calls look like this:
+
+```{r parallel-small}
+# items <- data.frame(
+#   w = c(2, 3, 4),
+#   v = c(3, 4, 5)
+# )
+items <- knapsack_objects[1:16, ]
+
+sequential <- brute_force_knapsack(items, W = 5)
+parallel_result <- brute_force_knapsack_parallel(
+  items, W = 5, parallel = TRUE
+)
+
+sequential
+parallel_result
+```
+
+Both return the same solution. Now we compare the running time on larger
+problems, where there is enough work to make the parallel version worthwhile.
+
+```{r parallel-compare}
+compare_timing <- function(n) {
+  items <- knapsack_objects[1:n, ]
+
+  t_seq <- system.time(
+    res_seq <- brute_force_knapsack(items, W = 3500)
+  )[["elapsed"]]
+
+  t_par <- system.time(
+    res_par <- brute_force_knapsack_parallel(items, W = 3500, parallel = TRUE)
+  )[["elapsed"]]
+
+  data.frame(
+    n = n,
+    sequential_sec = round(t_seq, 2),
+    parallel_sec = round(t_par, 2),
+    speedup = round(t_seq / t_par, 2),
+    same_result = identical(res_seq$value, res_par$value)
+  )
+}
+
+timings <- do.call(rbind, lapply(c(16, 18, 20), compare_timing))
+timings
+```
+
+This machine has **`r parallel::detectCores()` logical cores**.
+
+How to read the table:
+
+- **Small n:** the parallel version can be *slower*. Starting the worker
+  processes and copying the data to them has a fixed cost of about a second,
+  which is larger than the work itself when $n$ is small.
+- **Larger n:** the work grows as $2^n$ while the startup cost stays constant,
+  so the speedup increases and approaches the number of cores (it will not
+  reach it exactly, because of the startup cost and because the chunks
+  are combined at the end).
+
+For $n = 20$ the parallel search reached a speedup of
+**`r timings$speedup[timings$n == 20]`x** over the sequential one.
+
+## Summary
+
+| Algorithm | Objects | Time (sec) |
+|---|---|---|
+| Brute force | 16 | `r round(time_brute16[["elapsed"]], 2)` |
+| Dynamic programming | 500 | `r round(time_dyn500[["elapsed"]], 2)` |
+| Greedy heuristic | 1,000,000 | `r round(time_greedy[["elapsed"]], 2)` |
+
+Brute force and dynamic programming return the optimal solution, but brute
+force only works for very small $n$ and dynamic programming needs a moderate,
+integer capacity. The greedy heuristic scales to millions of objects but may
+return a suboptimal value. Parallelizing brute force helps once the problem is
+large enough to outweigh the startup cost, but it cannot overcome the
+exponential growth in $n$.
