@@ -1,4 +1,3 @@
-
 #' Solve the knapsack problem using brute force
 #'
 #' Checks all possible combinations of items and returns

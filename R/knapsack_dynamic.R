@@ -1,4 +1,3 @@
-
 #' Solve the knapsack problem using dynamic programming
 #'
 #' Finds the maximum total value without exceeding the

@@ -1,4 +1,3 @@
-
 #' Solve the knapsack problem using a greedy heuristic
 #'
 #' Selects items in descending order of value per unit of weight
