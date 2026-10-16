@@ -1,7 +1,7 @@
 Package: knapsack
 Type: Package
 Title: Knapsack Problem Algorithms
-Version: 0.1.0
+Version: 1.0.0
 Authors@R: c(
     person(
       "Sheethal", "Lakshmana",
@@ -21,7 +21,9 @@ LazyData: true
 Imports: 
     parallel
 Suggests: 
+    bench,
     knitr,
+    profvis,
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

@@ -71,8 +71,14 @@ brute_force_knapsack_parallel <- function(x, W, parallel = FALSE) {
 
   cores <- parallel::detectCores()
 
-  if (is.na(cores)) {
-    cores <- 1L
+  # R CMD check allows at most 2 cores
+  if (identical(Sys.getenv("_R_CHECK_LIMIT_CORES_"), "TRUE")) {
+    cores <- 2L
+  }
+
+  # Fall back to the sequential search if parallelism is not possible
+  if (is.na(cores) || cores < 2L) {
+    return(search_chunk(masks, items = x, W = W, n = n))
   }
 
   cores <- min(cores, length(masks))
